@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en-US">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+		<meta name="keywords" content="Pharmacokinetics, PBPK modeling, Tissue-to-plasma partition coefficient" />
+		<meta name="description" content="Kp prediction tool using the Rodgers and coworker's method." />
+		<title>Kp prediction tool box</title>
+		<script>
+			// relocate HTTP to HTTPS
+			if (document.location.protocol == 'http:') {
+				document.location.href = document.location.href.replace('http:', 'https:');
+			}
+			function detectIE() {
+				var ua = window.navigator.userAgent;
+
+				var msie = ua.indexOf('MSIE ');
+				if (msie > 0) {
+					// IE 10 or older => return version number
+					return parseInt(ua.substring(msie + 5, ua.indexOf('.', msie)), 10);
+				}
+
+				var trident = ua.indexOf('Trident/');
+				if (trident > 0) {
+					// IE 11 => return version number
+					var rv = ua.indexOf('rv:');
+					return parseInt(ua.substring(rv + 3, ua.indexOf('.', rv)), 10);
+				}
+
+				var edge = ua.indexOf('Edge/');
+				if (edge > 0) {
+					// Edge (IE 12+) => return version number
+					return parseInt(ua.substring(edge + 5, ua.indexOf('.', edge)), 10);
+				}
+
+				// other browser
+				return false;
+			}
+			var IE_version = detectIE();
+			if( IE_version !== false ) {
+				if (IE_version < 12) {
+					alert('This webpage may not support your browser.\nPlease update your web browser, or use another one\n(Microsoft Edge, Mozilla FireFox, Google Chrome, Naver Whale, etc).');
+				}
+			}
+		</script>
+		<link rel="stylesheet" href="./css/css.css" />
+		<link rel="stylesheet" href="./js/mathquill-0.10.1/mathquill.css" />
+		<script charset="UTF-8" src="./js/jquery-3.6.0.min.js"></script>
+		<script charset="UTF-8" src="./js/plotly-2.10.0.min.js"></script>
+		<script charset="UTF-8" src="./js/mathquill-0.10.1/mathquill.min.js"></script>
+		<script charset="UTF-8" src="./js/math.js/mathjs.10.4.2.js"></script>
+		<script charset="UTF-8" src="./js/js.js?220919-2"></script>
+	</head>
+	<body>
+		<header>
+		<h1>Kp predictor</h1>
+		<p>
+			Kp prediction based on Rodgers, et al.
+			Research only.
+		</p>
+		</header>
+		<form onsubmit="doCalculation();return false;" class="group">
+			<h2 class="group-title">Inputs</h2>
+			<fieldset>
+				<legend>System properties</legend>
+				
+				
+				<fieldset>
+					<legend>Species</legend>
+					<select id="species" name="species">
+						<option value="mouse">Mouse (Body weight: 0.025 kg)</option>
+						<option value="rat" selected="selected">Rat (Body weight: 0.25 kg)</option>
+						<option value="monkey">Rhesus Monkey (Body weight: 5 kg)</option>
+						<option value="human_male">Human male (Body weight: 65 kg)</option>
+					</select>
+				</fieldset>
+			<fieldset>
+				<legend>Compound properties</legend>
+			
+				<fieldset>
+					<legend>Physicochemical properties</legend>
+					<div id="control_mol_type">
+						<label for="mol_type">Compound type</label>
+						<select id="mol_type" name="mol_type">
+							<option value="monoprotic_acid" selected="selected">Monoprotic acid</option>
+							<option value="monoprotic_base">Monoprotic base</option>
+							<option value="diprotic_acid">Diprotic acid</option>
+							<option value="diprotic_base">Diprotic base</option>
+							<option value="zwitterion">Zwitterion</option>
+							<option value="neutral">Neutral</option>
+						</select>
+					</div>
+
+					<div id="control_pKa_wrap">
+						<div id="control_pKa">
+							<label for="pKa">pKa</label>
+							<input type="number" id="pKa" name="pKa" step="0.001" min="0" max="14"><br/>
+						</div>
+
+						<div id="control_pKa_12">
+							<label for="pKa_1">pKa<sub>1</sub></label>
+							<input type="number" id="pKa_1" name="pKa_1" step="0.001" min="0" max="14"><br/>
+
+							<label for="pKa_2">pKa<sub>2</sub></label>
+							<input type="number" id="pKa_2" name="pKa_2" step="0.001" min="0" max="14"><br/>
+							<!-- pKa1<pKa2 -->
+						</div>
+
+						<div id="control_pKa_acid_base">
+							<label for="pKa_acid">pKa<sub>acid</sub></label>
+							<input type="number" id="pKa_acid" name="pKa_acid" step="0.001" min="0" max="14"><br/>
+
+							<label for="pKa_base">pKa<sub>base</sub></label>
+							<input type="number" id="pKa_base" name="pKa_base" step="0.001" min="0" max="14"><br/>
+						</div>
+					</div>
+
+					<div id="control_logD">
+						<label for="logD">logD<sub>pH7.4</sub></label>
+						<input type="number" id="logD" name="logD" step="0.00001" min="-1000" max="1000"><br/>
+					</div>
+					
+					<label for="logP">logP<sub>o:w</sub> (Octanol:Water)</label>
+					<input type="number" id="logP" name="logP" step="0.00001" min="-1000" max="1000"><br/>
+
+					<div id="control_logP_vegi">
+						<label for="logP_vegi">logP<sub>vo:w</sub> (Olive oil:Water)</label>
+						<input type="number" id="logP_vegi" name="logP_vegi" step="0.00001" min="-1000" max="1000"> <button type="button" onclick="doPredictLogPvow(); return false;">Predict logP<sub>vo:w</sub> (Hansch equation)</button><br/>
+						
+						<blockquote>Hansch equation: <div id="hansch-eq" class="soo_math_equations_area"></div><script>$(window).on('load', function() {var soo_MQ_1 = MathQuill.getInterface(2);var soo_mathfield1 = soo_MQ_1.StaticMath(document.getElementById('hansch-eq'));soo_mathfield1.latex('\\log P_{vo:w}=1.115\\cdot\\log P_{o:w}-1.35');});</script></blockquote>
+					</div>
+				</fieldset>
+				<fieldset>
+					<legend>Blood partitioning properties</legend>
+
+					<label for="fup">f<sub>up</sub> (Free fraction in plasma)</label>
+					<input type="number" id="fup" name="fup" step="0.000001" min="0.000001" max="1"><br/>
+
+					<label for="RB">R (Blood-to-plasma partition coefficient)</label>
+					<input type="number" id="RB" name="RB" step="0.000001" min="0.000001" max="1000"><br/>
+				</fieldset>
+			</fieldset>
+			
+			<button type="submit">Calculate</button>
+		</form>
+		
+		<div id="results_layer" class="group">
+			<h2 class="group-title">Results</h2>
+			<div class="group">
+				<h3 class="group-title">K<sub>p</sub></h3>
+				<div id="results_Kp" class="group_results"></div>
+			</div>
+		</div>
+		
+		<div id="loading_layer" class="loading_layer">
+			<h2>Wait a moment...</h2>
+			<div id="progress_layer"></div>
+		</div>
+		
+		<footer></footer>
+	</body>
+</html>
